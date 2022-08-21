@@ -2,7 +2,8 @@ use std::{
     collections::VecDeque, io, io::Stdout, io::Write, thread, time::Duration,
 };
 use termion::{
-    event::Key, input::TermRead, raw::IntoRawMode, raw::RawTerminal,
+    event::Key, input::Keys, input::TermRead, raw::IntoRawMode,
+    raw::RawTerminal, AsyncReader,
 };
 
 /*
@@ -24,6 +25,11 @@ enum SnakeDirection {
     Left,
 }
 
+enum UserInput {
+    Quit,
+    Direction(SnakeDirection),
+}
+
 struct GameState {
     grid: Grid,
     // The sleep time between game state updates.
@@ -40,6 +46,7 @@ struct GameState {
 const SNAKE: Cell = 1;
 const EMPTY: Cell = 0;
 const FOOD: Cell = 2;
+const QUIT_CHAR: char = 'q';
 
 fn grid_size(grid: &Grid) -> (usize, usize) {
     (grid.len(), grid[0].len())
@@ -53,7 +60,7 @@ fn init_game_state(nrows: usize, ncols: usize) -> GameState {
         last_direction: init_direction(),
         head: (0, 1),
         tail: (0, 0),
-        head_directions: VecDeque::from([]),
+        head_directions: VecDeque::from([init_direction()]),
     };
     let mut add_snake_cell = |p: CellPos| game_state.grid[p.0][p.1] = SNAKE;
     // Adding the snake in the grid.
@@ -161,14 +168,51 @@ fn update_snake(
     true
 }
 
+fn capture_input(stdin_keys: &mut Keys<AsyncReader>) -> Option<UserInput> {
+    let mut last_key = None;
+    // We consider only the user's last input, except if it is to quit the game.
+    for key in stdin_keys {
+        last_key = match key {
+            Ok(k) => Some(k),
+            _ => None,
+        };
+        if let Some(Key::Char(QUIT_CHAR)) = last_key {
+            break;
+        }
+    }
+    match last_key {
+        Some(Key::Char(QUIT_CHAR)) => Some(UserInput::Quit),
+        Some(Key::Right) => Some(UserInput::Direction(SnakeDirection::Right)),
+        Some(Key::Down) => Some(UserInput::Direction(SnakeDirection::Down)),
+        Some(Key::Left) => Some(UserInput::Direction(SnakeDirection::Left)),
+        Some(Key::Up) => Some(UserInput::Direction(SnakeDirection::Up)),
+        _ => None,
+    }
+}
+
 fn main() -> io::Result<()> {
     let mut stdout = io::stdout().into_raw_mode().unwrap();
+    let mut stdin_keys = termion::async_stdin().keys();
     let mut game = init_game_state(30, 60);
-    refresh_screen(&mut stdout, &String::from("Start"), &game.grid);
 
-    for i in 0..10 {
-        let new_direction = game.last_direction;
+    refresh_screen(&mut stdout, &String::from("Start"), &game.grid);
+    for i in 0.. {
+        // We take the user input (if it exists) and check if the user wants to
+        // quit the game.
+        let user_input = capture_input(&mut stdin_keys);
+        if let Some(UserInput::Quit) = user_input {
+            break;
+        }
+        // If the user inputted a new snake direction, we use it; otherwise, we
+        // make the snake continue in the same direction.
+        let new_direction = match user_input {
+            Some(UserInput::Direction(snake_direction)) => snake_direction,
+            _ => game.last_direction,
+        };
+        // We update the snake's position and check if it is valid (the snake
+        // is inside the game board).
         let is_valid = update_snake(&mut game, new_direction);
+        game.last_direction = new_direction;
         // If the update is valid, we continue playing.
         if is_valid {
             refresh_screen(&mut stdout, &format!("Iteration {i}"), &game.grid);
@@ -180,32 +224,6 @@ fn main() -> io::Result<()> {
             break;
         }
     }
-
-    //    let mut stdin_keys = termion::async_stdin().keys();
-    //    let mut stdout = io::stdout().into_raw_mode().unwrap();
-    //
-    //    for i in 0..10 {
-    //        write!(stdout, "{0}Iteration {i}\n{0}", termion::cursor::Left(20))
-    //            .unwrap();
-    //
-    //        if let Some(Ok(c)) = stdin_keys.next() {
-    //            match c {
-    //                Key::Char('q') => break,
-    //                Key::Char(c) => println!("{}", c),
-    //                Key::Alt(c) => println!("^{}", c),
-    //                Key::Ctrl(c) => println!("*{}", c),
-    //                Key::Esc => println!("ESC"),
-    //                Key::Left => println!("←"),
-    //                Key::Right => println!("→"),
-    //                Key::Up => println!("↑"),
-    //                Key::Down => println!("↓"),
-    //                Key::Backspace => println!("×"),
-    //                _ => {}
-    //            }
-    //            stdout.flush().unwrap();
-    //        }
-    //        thread::sleep(Duration::from_secs(1));
-    //    }
 
     write!(stdout, "{}", termion::cursor::Show).unwrap();
     Ok(())
