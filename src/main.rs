@@ -183,6 +183,8 @@ fn update_snake(
         );
         (tx as usize, ty as usize)
     };
+    // We keep track of the last direction.
+    state.last_direction = new_direction;
 
     true
 }
@@ -232,7 +234,6 @@ fn main() -> io::Result<()> {
         // We update the snake's position and check if it is valid (the snake
         // is inside the game board).
         let is_valid = update_snake(&mut game, new_direction);
-        game.last_direction = new_direction;
         // If the update is valid, we continue playing.
         if is_valid {
             refresh_screen(&mut stdout, &format!("Iteration {i}"), &game.grid);
