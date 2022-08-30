@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::{
     collections::VecDeque, io, io::Stdout, io::Write, thread, time::Duration,
 };
@@ -43,13 +44,31 @@ struct GameState {
     head_directions: VecDeque<SnakeDirection>,
 }
 
+const GRID_ROWS: usize = 30;
+const GRID_COLUMNS: usize = 60;
 const SNAKE: Cell = 1;
 const EMPTY: Cell = 0;
 const FOOD: Cell = 2;
 const QUIT_CHAR: char = 'q';
+const MAX_FOOD_AMOUNT: usize = 15;
 
 fn grid_size(grid: &Grid) -> (usize, usize) {
     (grid.len(), grid[0].len())
+}
+
+fn add_food(grid: &mut Grid, max_amount: usize) {
+    let (nrows, ncols) = grid_size(grid);
+    // A random number generator.
+    let mut rng = rand::thread_rng();
+    // This is a sequence of random food locations like [(x1, y1), (x2, y2)].
+    let food_locations = (0..max_amount)
+        .map(|_| (rng.gen_range(0..nrows), rng.gen_range(0..ncols)));
+    // We add the food to the grid, but only in empty cells.
+    for (food_x, food_y) in food_locations {
+        if grid[food_x][food_y] == EMPTY {
+            grid[food_x][food_y] = FOOD;
+        }
+    }
 }
 
 fn init_game_state(nrows: usize, ncols: usize) -> GameState {
@@ -193,7 +212,8 @@ fn capture_input(stdin_keys: &mut Keys<AsyncReader>) -> Option<UserInput> {
 fn main() -> io::Result<()> {
     let mut stdout = io::stdout().into_raw_mode().unwrap();
     let mut stdin_keys = termion::async_stdin().keys();
-    let mut game = init_game_state(30, 60);
+    let mut game = init_game_state(GRID_ROWS, GRID_COLUMNS);
+    add_food(&mut game.grid, MAX_FOOD_AMOUNT);
 
     refresh_screen(&mut stdout, &String::from("Start"), &game.grid);
     for i in 0.. {
@@ -227,4 +247,23 @@ fn main() -> io::Result<()> {
 
     write!(stdout, "{}", termion::cursor::Show).unwrap();
     Ok(())
+}
+
+#[cfg(test)]
+mod main_test {
+    use super::*;
+
+    #[test]
+    fn test_food_gen() {
+        let (nrows, ncols, nfood) = (10, 10, 5);
+        let mut game = init_game_state(nrows, ncols);
+        add_food(&mut game.grid, nfood);
+        print_grid(&game.grid);
+
+        let grid_sum: u8 = game.grid.iter().flat_map(|cols| cols.iter()).sum();
+        // The food is randomly placed in the grid, and it might be located in
+        // the snake place (therefore, ignored). The number of food in the grid
+        // may discount the initial snake size (which is 2).
+        assert!(grid_sum > (2 * SNAKE + (nfood as u8 - 2) * FOOD))
+    }
 }
