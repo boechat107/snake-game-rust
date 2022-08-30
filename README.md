@@ -1,4 +1,4 @@
-# Snake Game 
+# Snake Game
 
 This project implements an elementary version of the Snake Game.
 
@@ -20,5 +20,5 @@ The game stops if the snake hits a wall or if you press `q`.
 
 ## To Do
 
-+ [ ] Make the snake grow by eating food
++ [x] Make the snake grow by eating food
 + [ ] Add different difficulty levels (making the snake move faster)
